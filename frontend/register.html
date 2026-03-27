@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register | Mentor Connect</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="page">
+  <div class="container">
+    <h2>Register</h2>
+    <p class="subtitle">Create your account and get matched</p>
+    <div id="status" class="status info" style="display:none;"></div>
+
+    <form id="registerForm">
+      <input id="name" placeholder="Full Name" required>
+      <input type="email" id="email" placeholder="Email" required>
+      <input type="password" id="password" placeholder="Password" required>
+
+      <select id="role" required>
+        <option value="">Select Role</option>
+        <option value="mentor">Mentor (Senior)</option>
+        <option value="mentee">Mentee (Junior)</option>
+      </select>
+
+      <button type="submit" id="registerButton">Register</button>
+    </form>
+
+    <a href="login.html">Already registered? Login</a>
+  </div>
+</div>
+<script src="js/config.js"></script>
+<script src="js/register.js"></script>
+</body>
+</html>
