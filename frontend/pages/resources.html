@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resources – Peerly</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/main.css">
+<style>
+.resource-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.resource-card { background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 16px 18px; transition: all var(--transition); }
+.resource-card:hover { box-shadow: var(--shadow); border-color: var(--primary); }
+.res-type-icon { font-size: 28px; margin-bottom: 10px; }
+.res-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.res-desc { font-size: 13px; color: var(--gray-500); line-height: 1.5; margin-bottom: 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.res-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.res-uploader { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gray-500); }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content">
+      <div class="flex justify-between items-center mb-4">
+        <div class="flex gap-2 flex-wrap">
+          <select class="form-control" id="cat-filter" style="width:auto" onchange="loadResources()">
+            <option value="">All categories</option>
+            <option>career</option><option>technical</option><option>academic</option><option>tools</option><option>general</option>
+          </select>
+          <input type="text" class="form-control" id="res-search" placeholder="Search…" style="width:220px" oninput="loadResources()">
+        </div>
+        <button class="btn btn-primary" onclick="openModal('new-res-modal')">+ Add resource</button>
+      </div>
+      <div class="resource-grid" id="res-grid">
+        <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--gray-400)">Loading…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="new-res-modal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Add Resource</span><button class="btn btn-ghost btn-icon" onclick="closeModal('new-res-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Type</label>
+        <select id="res-type" class="form-control" onchange="toggleResType()">
+          <option value="link">Link</option><option value="file">File upload</option><option value="doc">Document</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Title</label><input type="text" id="res-title" class="form-control"></div>
+      <div class="form-group"><label class="form-label">Description</label><textarea id="res-desc" class="form-control" rows="2"></textarea></div>
+      <div id="url-field" class="form-group"><label class="form-label">URL</label><input type="url" id="res-url" class="form-control" placeholder="https://…"></div>
+      <div id="file-field" class="form-group hidden"><label class="form-label">File</label><input type="file" id="res-file" class="form-control"></div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Category</label>
+          <select id="res-cat" class="form-control"><option>general</option><option>career</option><option>technical</option><option>academic</option><option>tools</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Tags</label><input type="text" id="res-tags" class="form-control" placeholder="comma, separated"></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('new-res-modal')">Cancel</button><button class="btn btn-primary" onclick="addResource()">Add</button></div>
+  </div>
+</div>
+
+<script src="../js/utils.js"></script>
+<script src="../js/page.js"></script>
+<script>
+initPage('resources', 'Resources');
+const me = getUser();
+const typeIcons = { link: '🔗', file: '📄', doc: '📝' };
+
+function toggleResType() {
+  const type = document.getElementById('res-type').value;
+  document.getElementById('url-field').classList.toggle('hidden', type === 'file');
+  document.getElementById('file-field').classList.toggle('hidden', type !== 'file');
+}
+
+async function loadResources() {
+  const grid = document.getElementById('res-grid');
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--gray-400)">Loading…</div>';
+  try {
+    let url = '/resources?';
+    const cat = document.getElementById('cat-filter').value;
+    const search = document.getElementById('res-search').value;
+    if (cat) url += `category=${cat}&`;
+    if (search) url += `search=${encodeURIComponent(search)}&`;
+    const resources = await apiFetch(url);
+    if (!resources.length) { grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📚</div><div class="empty-title">No resources yet</div></div>'; return; }
+    grid.innerHTML = resources.map(r => `
+      <div class="resource-card">
+        <div class="res-type-icon">${typeIcons[r.type]||'📌'}</div>
+        <div class="res-title">${r.title}</div>
+        ${r.description ? `<div class="res-desc">${r.description}</div>` : ''}
+        ${r.tags?.length ? `<div style="margin-bottom:8px">${r.tags.map(t=>`<span class="tag">#${t}</span>`).join('')}</div>` : ''}
+        <div class="res-footer">
+          <div class="res-uploader">
+            <div class="avatar avatar-sm">${avatarHTML(r.uploadedBy)}</div>
+            ${r.uploadedBy?.name}
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-ghost btn-sm" onclick="saveResource('${r._id}',this)">🔖 ${r.saves?.length||0}</button>
+            ${r.url ? `<a href="${r.url}" target="_blank" class="btn btn-primary btn-sm">Open</a>` : ''}
+            ${r.fileUrl ? `<a href="http://localhost:5000${r.fileUrl}" target="_blank" class="btn btn-primary btn-sm">Download</a>` : ''}
+            ${r.uploadedBy?._id === me._id ? `<button class="btn btn-ghost btn-sm" onclick="deleteResource('${r._id}')">🗑</button>` : ''}
+          </div>
+        </div>
+      </div>`).join('');
+  } catch (err) { grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-title">Error: ${err.message}</div></div>`; }
+}
+
+async function addResource() {
+  try {
+    const type = document.getElementById('res-type').value;
+    const fd = new FormData();
+    fd.append('title', document.getElementById('res-title').value);
+    fd.append('description', document.getElementById('res-desc').value);
+    fd.append('type', type);
+    fd.append('category', document.getElementById('res-cat').value);
+    fd.append('tags', document.getElementById('res-tags').value);
+    if (type === 'file') { const f = document.getElementById('res-file').files[0]; if (f) fd.append('file', f); }
+    else fd.append('url', document.getElementById('res-url').value);
+    await apiFetch('/resources', { method: 'POST', body: fd });
+    closeModal('new-res-modal');
+    showToast('Resource added!', 'success');
+    loadResources();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function saveResource(id, btn) {
+  try {
+    const { saves } = await apiFetch(`/resources/${id}/save`, { method: 'POST' });
+    btn.textContent = `🔖 ${saves}`;
+  } catch {}
+}
+
+async function deleteResource(id) {
+  if (!confirm('Delete this resource?')) return;
+  try { await apiFetch(`/resources/${id}`, { method: 'DELETE' }); showToast('Deleted', 'info'); loadResources(); }
+  catch (err) { showToast(err.message, 'error'); }
+}
+
+loadResources();
+</script>
+</body>
+</html>

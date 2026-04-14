@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Peerly</title>
+<style>
+  body { font-family: sans-serif; display:flex; align-items:center; justify-content:center;
+    min-height:100vh; background:#f0eeff; margin:0; }
+  .card { background:white; border-radius:20px; padding:48px 40px; text-align:center;
+    box-shadow:0 8px 40px rgba(108,99,255,0.13); }
+  .logo { width:56px; height:56px; background:#6C63FF; border-radius:16px;
+    display:flex; align-items:center; justify-content:center; color:white;
+    font-size:28px; font-weight:800; margin:0 auto 16px; }
+  h1 { font-size:28px; font-weight:800; color:#111827; margin:0 0 6px; }
+  p { color:#6b7280; margin-bottom:28px; }
+  a { display:inline-block; padding:11px 28px; border-radius:10px; font-weight:600;
+    font-size:15px; text-decoration:none; transition:opacity 0.15s; }
+  .btn-primary { background:#6C63FF; color:white; margin-right:10px; }
+  .btn-secondary { border:1px solid #d1d5db; color:#374151; }
+  a:hover { opacity:0.85; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">P</div>
+  <h1>Peerly</h1>
+  <p>Connect with peer mentors and grow together</p>
+  <a href="login.html" class="btn-primary">Sign in</a>
+  <a href="register.html" class="btn-secondary">Create account</a>
+</div>
+<script>
+  // Auto-redirect logged-in users to dashboard
+  if (localStorage.getItem('peerly_token')) {
+    window.location.href = 'pages/dashboard.html';
+  }
+</script>
+</body>
+</html>

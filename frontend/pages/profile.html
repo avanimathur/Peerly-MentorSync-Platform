@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile – Peerly</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/main.css">
+<style>
+.profile-header { background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%); border-radius: var(--radius-lg); padding: 32px; color: white; margin-bottom: 24px; display: flex; align-items: center; gap: 24px; }
+.avatar-upload-wrap { position: relative; cursor: pointer; }
+.avatar-upload-wrap .avatar-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.4); border-radius: 50%; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; font-size: 20px; }
+.avatar-upload-wrap:hover .avatar-overlay { opacity: 1; }
+.profile-name { font-size: 24px; font-weight: 700; }
+.profile-role { font-size: 14px; opacity: 0.85; margin-top: 2px; }
+.profile-stats { display: flex; gap: 24px; margin-top: 14px; }
+.profile-stat { text-align: center; }
+.profile-stat-val { font-size: 20px; font-weight: 700; }
+.profile-stat-label { font-size: 12px; opacity: 0.8; }
+.tag-input-wrap { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border: 1px solid var(--gray-300); border-radius: var(--radius-sm); min-height: 42px; cursor: text; }
+.tag-input-wrap input { border: none; outline: none; font-size: 14px; flex: 1; min-width: 120px; }
+.tag-removable { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; background: var(--primary-light); border-radius: 20px; font-size: 13px; color: var(--primary); font-weight: 500; }
+.tag-removable button { background: none; border: none; cursor: pointer; color: var(--primary); font-size: 14px; line-height: 1; padding: 0; }
+.avail-row { display: grid; grid-template-columns: 120px 1fr 1fr auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content" style="max-width:780px">
+      <div id="profile-header-area"></div>
+
+      <div class="tabs mb-6">
+        <button class="tab active" onclick="showSection('info', this)">Basic info</button>
+        <button class="tab" onclick="showSection('skills', this)">Skills & interests</button>
+        <button class="tab" onclick="showSection('availability', this)">Availability</button>
+        <button class="tab" onclick="showSection('privacy', this)">Privacy</button>
+        <button class="tab" onclick="showSection('badges', this)">Badges</button>
+      </div>
+
+      <div id="section-info">
+        <div class="card"><div class="card-body">
+          <div class="grid-2">
+            <div class="form-group"><label class="form-label">Full name</label><input type="text" id="p-name" class="form-control"></div>
+            <div class="form-group"><label class="form-label">Department</label><input type="text" id="p-dept" class="form-control"></div>
+          </div>
+          <div class="grid-2">
+            <div class="form-group"><label class="form-label">Year</label>
+              <select id="p-year" class="form-control">
+                <option value="">Select year</option>
+                <option>1st Year</option><option>2nd Year</option><option>3rd Year</option>
+                <option>4th Year</option><option>Masters</option><option>PhD</option>
+              </select>
+            </div>
+            <div class="form-group"><label class="form-label">Timezone</label>
+              <select id="p-timezone" class="form-control">
+                <option value="UTC">UTC</option><option value="America/New_York">Eastern (ET)</option>
+                <option value="America/Chicago">Central (CT)</option><option value="America/Los_Angeles">Pacific (PT)</option>
+                <option value="Europe/London">London (GMT)</option><option value="Asia/Kolkata">India (IST)</option>
+                <option value="Asia/Singapore">Singapore (SGT)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group"><label class="form-label">Bio</label><textarea id="p-bio" class="form-control" rows="3" placeholder="Tell mentors/mentees about yourself…"></textarea></div>
+          <div class="grid-2">
+            <div class="form-group"><label class="form-label">LinkedIn</label><input type="url" id="p-linkedin" class="form-control" placeholder="https://linkedin.com/in/…"></div>
+            <div class="form-group"><label class="form-label">GitHub</label><input type="url" id="p-github" class="form-control" placeholder="https://github.com/…"></div>
+          </div>
+          <button class="btn btn-primary" onclick="saveInfo()">Save changes</button>
+        </div></div>
+      </div>
+
+      <div id="section-skills" class="hidden">
+        <div class="card"><div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Skills</label>
+            <div class="tag-input-wrap" id="skills-wrap" onclick="document.getElementById('skill-input').focus()">
+              <input type="text" id="skill-input" placeholder="Type skill and press Enter…" onkeydown="addTag('skills', event)">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Interests</label>
+            <div class="tag-input-wrap" id="interests-wrap" onclick="document.getElementById('interest-input').focus()">
+              <input type="text" id="interest-input" placeholder="Type interest and press Enter…" onkeydown="addTag('interests', event)">
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="saveSkills()">Save changes</button>
+        </div></div>
+      </div>
+
+      <div id="section-availability" class="hidden">
+        <div class="card"><div class="card-body">
+          <p class="text-sm text-muted mb-4">Set your weekly availability so mentees can see when you're free.</p>
+          <div id="avail-rows"></div>
+          <button class="btn btn-secondary btn-sm mb-4" onclick="addAvailRow()">+ Add slot</button>
+          <br>
+          <button class="btn btn-primary" onclick="saveAvailability()">Save availability</button>
+        </div></div>
+      </div>
+
+      <div id="section-privacy" class="hidden">
+        <div class="card"><div class="card-body">
+          <div class="form-group">
+            <label class="form-label">Profile visibility</label>
+            <select id="p-visibility" class="form-control">
+              <option value="public">Public – anyone can view</option>
+              <option value="mentees">Mentees only – accepted mentees can view</option>
+              <option value="private">Private – hidden from listing</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notification preferences</label>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+              <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer">
+                <input type="checkbox" id="notif-email"> Email notifications
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer">
+                <input type="checkbox" id="notif-session"> Session reminders
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer">
+                <input type="checkbox" id="notif-msg"> Message alerts
+              </label>
+              <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer">
+                <input type="checkbox" id="notif-req"> Request alerts
+              </label>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="savePrivacy()">Save preferences</button>
+        </div></div>
+      </div>
+
+      <div id="section-badges" class="hidden">
+        <div class="card"><div class="card-body">
+          <h3 class="font-semibold mb-4">Your badges</h3>
+          <div id="badges-list"></div>
+          <div class="divider"></div>
+          <div class="flex gap-3 items-center">
+            <div style="font-size:28px">🔥</div>
+            <div>
+              <div class="font-semibold">Streak: <span id="streak-count">0</span> days</div>
+              <div class="text-sm text-muted">Keep logging in daily to build your streak!</div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- Account actions — always visible at bottom -->
+      <div class="card" style="margin-top:24px;border-color:var(--gray-200)">
+        <div class="card-header"><h3 style="color:var(--gray-700)">Account</h3></div>
+        <div class="card-body">
+          <div class="flex items-center justify-between" style="flex-wrap:wrap;gap:12px">
+            <div>
+              <div class="font-semibold" style="font-size:14px">Sign out of Peerly</div>
+              <div class="text-sm text-muted">You'll need to sign in again to access your account.</div>
+            </div>
+            <button class="btn btn-danger" onclick="logout()">⎋ Sign out</button>
+          </div>
+          <div class="divider"></div>
+          <div class="flex items-center justify-between" style="flex-wrap:wrap;gap:12px">
+            <div>
+              <div class="font-semibold" style="font-size:14px;color:var(--danger)">Delete account</div>
+              <div class="text-sm text-muted">Permanently remove your data. This cannot be undone.</div>
+            </div>
+            <button class="btn btn-outline" style="border-color:var(--danger);color:var(--danger)" onclick="showToast('Please contact support to delete your account.','info')">Delete account</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<input type="file" id="avatar-file-input" accept="image/*" style="display:none" onchange="uploadAvatar(this)">
+
+<script src="../js/utils.js"></script>
+<script src="../js/page.js"></script>
+<script>
+initPage('profile', 'Profile');
+let user = getUser();
+const skills = [], interests = [], availability = [];
+
+function showSection(name, btn) {
+  document.querySelectorAll('[id^="section-"]').forEach(s => s.classList.add('hidden'));
+  document.getElementById('section-' + name).classList.remove('hidden');
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+async function loadProfile() {
+  try {
+    const fresh = await apiFetch('/auth/me');
+    user = fresh;
+    localStorage.setItem('peerly_user', JSON.stringify(fresh));
+    renderHeader(fresh);
+    fillForm(fresh);
+    renderSkillTags('skills', fresh.skills || []);
+    renderSkillTags('interests', fresh.interests || []);
+    renderAvailability(fresh.availability || []);
+    renderBadges(fresh.badges || []);
+    document.getElementById('streak-count').textContent = fresh.streakCount || 0;
+    fillPrivacy(fresh);
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+function renderHeader(u) {
+  document.getElementById('profile-header-area').innerHTML = `
+    <div class="profile-header">
+      <div class="avatar-upload-wrap" onclick="document.getElementById('avatar-file-input').click()">
+        <div class="avatar avatar-xl">${avatarHTML(u)}</div>
+        <div class="avatar-overlay">📷</div>
+      </div>
+      <div>
+        <div class="profile-name">${u.name} ${u.isVerified ? '<span style="font-size:14px">✓</span>' : ''}</div>
+        <div class="profile-role">${u.role} ${u.department ? '· ' + u.department : ''}</div>
+        <div class="profile-stats">
+          <div class="profile-stat"><div class="profile-stat-val">${u.totalSessions || 0}</div><div class="profile-stat-label">Sessions</div></div>
+          <div class="profile-stat"><div class="profile-stat-val">${u.totalGoalsCompleted || 0}</div><div class="profile-stat-label">Goals</div></div>
+          <div class="profile-stat"><div class="profile-stat-val">${u.reputationScore || 0}</div><div class="profile-stat-label">Rep score</div></div>
+          ${u.role === 'mentor' ? `<div class="profile-stat"><div class="profile-stat-val">${u.menteeCount || 0}</div><div class="profile-stat-label">Mentees</div></div>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+function fillForm(u) {
+  document.getElementById('p-name').value = u.name || '';
+  document.getElementById('p-dept').value = u.department || '';
+  document.getElementById('p-bio').value = u.bio || '';
+  document.getElementById('p-linkedin').value = u.linkedIn || '';
+  document.getElementById('p-github').value = u.github || '';
+  document.getElementById('p-timezone').value = u.timezone || 'UTC';
+  if (u.year) document.getElementById('p-year').value = u.year;
+}
+
+function fillPrivacy(u) {
+  document.getElementById('p-visibility').value = u.profileVisibility || 'public';
+  document.getElementById('notif-email').checked = u.notifPrefs?.email !== false;
+  document.getElementById('notif-session').checked = u.notifPrefs?.sessionReminder !== false;
+  document.getElementById('notif-msg').checked = u.notifPrefs?.messageAlerts !== false;
+  document.getElementById('notif-req').checked = u.notifPrefs?.requestAlerts !== false;
+}
+
+// ── Tag input system ──
+const tagData = { skills: [], interests: [] };
+
+function renderSkillTags(type, items) {
+  tagData[type] = [...items];
+  const wrap = document.getElementById(type + '-wrap');
+  const input = document.getElementById(type.replace('s','') + '-input') || wrap.querySelector('input');
+  const tags = wrap.querySelectorAll('.tag-removable');
+  tags.forEach(t => t.remove());
+  tagData[type].forEach((tag, idx) => {
+    const el = document.createElement('span');
+    el.className = 'tag-removable';
+    el.innerHTML = `${tag} <button onclick="removeTag('${type}',${idx})">×</button>`;
+    wrap.insertBefore(el, input);
+  });
+}
+
+function addTag(type, e) {
+  if (e.key !== 'Enter' && e.key !== ',') return;
+  e.preventDefault();
+  const input = e.target;
+  const val = input.value.trim().replace(/,$/, '');
+  if (val && !tagData[type].includes(val)) { tagData[type].push(val); renderSkillTags(type, tagData[type]); }
+  input.value = '';
+}
+
+function removeTag(type, idx) {
+  tagData[type].splice(idx, 1);
+  renderSkillTags(type, tagData[type]);
+}
+
+// ── Availability ──
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+function renderAvailability(items) {
+  const container = document.getElementById('avail-rows');
+  container.innerHTML = '';
+  items.forEach((slot, i) => addAvailRow(slot, i));
+}
+
+function addAvailRow(slot = {}, idx) {
+  const container = document.getElementById('avail-rows');
+  const div = document.createElement('div');
+  div.className = 'avail-row';
+  div.innerHTML = `
+    <select class="form-control avail-day">${DAYS.map(d => `<option ${slot.day === d ? 'selected' : ''}>${d}</option>`).join('')}</select>
+    <input type="time" class="form-control avail-start" value="${slot.startTime || '09:00'}">
+    <input type="time" class="form-control avail-end" value="${slot.endTime || '17:00'}">
+    <button class="btn btn-ghost btn-icon" onclick="this.parentElement.remove()">✕</button>`;
+  container.appendChild(div);
+}
+
+// ── Badges ──
+function renderBadges(badges) {
+  const el = document.getElementById('badges-list');
+  if (!badges.length) { el.innerHTML = '<div class="text-sm text-muted">No badges yet. Complete sessions and goals to earn them!</div>'; return; }
+  el.innerHTML = `<div class="badge-list">${badges.map(b => `<div class="badge-item">🏆 ${b.name}<span class="text-xs text-muted" style="margin-left:6px">${formatDate(b.earnedAt)}</span></div>`).join('')}</div>`;
+}
+
+// ── Save functions ──
+async function saveInfo() {
+  try {
+    const updated = await apiFetch('/users/profile', {
+      method: 'PUT',
+      body: JSON.stringify({
+        name: document.getElementById('p-name').value,
+        department: document.getElementById('p-dept').value,
+        year: document.getElementById('p-year').value,
+        bio: document.getElementById('p-bio').value,
+        linkedIn: document.getElementById('p-linkedin').value,
+        github: document.getElementById('p-github').value,
+        timezone: document.getElementById('p-timezone').value
+      })
+    });
+    localStorage.setItem('peerly_user', JSON.stringify(updated));
+    showToast('Profile updated!', 'success');
+    renderHeader(updated);
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function saveSkills() {
+  try {
+    await apiFetch('/users/profile', {
+      method: 'PUT',
+      body: JSON.stringify({ skills: tagData.skills, interests: tagData.interests })
+    });
+    showToast('Skills saved!', 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function saveAvailability() {
+  const rows = document.querySelectorAll('.avail-row');
+  const availability = Array.from(rows).map(r => ({
+    day: r.querySelector('.avail-day').value,
+    startTime: r.querySelector('.avail-start').value,
+    endTime: r.querySelector('.avail-end').value
+  }));
+  try {
+    await apiFetch('/users/profile', { method: 'PUT', body: JSON.stringify({ availability }) });
+    showToast('Availability saved!', 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function savePrivacy() {
+  try {
+    await apiFetch('/users/profile', {
+      method: 'PUT',
+      body: JSON.stringify({
+        profileVisibility: document.getElementById('p-visibility').value,
+        notifPrefs: {
+          email: document.getElementById('notif-email').checked,
+          sessionReminder: document.getElementById('notif-session').checked,
+          messageAlerts: document.getElementById('notif-msg').checked,
+          requestAlerts: document.getElementById('notif-req').checked
+        }
+      })
+    });
+    showToast('Preferences saved!', 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function uploadAvatar(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('avatar', file);
+  try {
+    const updated = await apiFetch('/users/avatar', { method: 'POST', body: fd });
+    localStorage.setItem('peerly_user', JSON.stringify(updated));
+    renderHeader(updated);
+    showToast('Avatar updated!', 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+loadProfile();
+</script>
+</body>
+</html>

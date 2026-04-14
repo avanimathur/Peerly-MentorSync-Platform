@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin – Peerly</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/main.css">
+<style>
+.admin-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.admin-table th { text-align: left; padding: 10px 14px; font-size: 12px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--gray-200); background: var(--gray-50); }
+.admin-table td { padding: 12px 14px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+.admin-table tr:hover td { background: var(--gray-50); }
+.user-cell { display: flex; align-items: center; gap: 10px; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content">
+      <div class="stats-grid" id="admin-stats">
+        <div style="text-align:center;padding:20px;color:var(--gray-400);grid-column:1/-1">Loading stats…</div>
+      </div>
+
+      <div class="tabs mb-4">
+        <button class="tab active" onclick="showAdminTab('users', this)">Users</button>
+        <button class="tab" onclick="showAdminTab('reports', this)">Reported posts</button>
+      </div>
+
+      <div id="admin-users">
+        <div class="card mb-4">
+          <div class="card-header">
+            <h3>User management</h3>
+            <div class="flex gap-2">
+              <select id="role-filter" class="form-control" style="width:130px" onchange="loadUsers()">
+                <option value="">All roles</option>
+                <option value="mentor">Mentors</option>
+                <option value="mentee">Mentees</option>
+                <option value="admin">Admins</option>
+              </select>
+              <input type="text" id="user-search" class="form-control" style="width:200px" placeholder="Search users…" oninput="loadUsers()">
+            </div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="admin-table">
+              <thead><tr><th>User</th><th>Role</th><th>Department</th><th>Joined</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="users-tbody"><tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray-400)">Loading…</td></tr></tbody>
+            </table>
+          </div>
+          <div id="users-pagination" style="padding:14px 16px;border-top:1px solid var(--gray-100);display:flex;gap:8px;justify-content:flex-end"></div>
+        </div>
+      </div>
+
+      <div id="admin-reports" class="hidden">
+        <div class="card">
+          <div class="card-header"><h3>Reported posts</h3></div>
+          <div id="reported-posts" style="padding:16px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/utils.js"></script>
+<script src="../js/page.js"></script>
+<script>
+initPage('admin', 'Admin Panel');
+const user = getUser();
+if (user?.role !== 'admin') { window.location.href = 'dashboard.html'; }
+
+let userPage = 1;
+
+function showAdminTab(tab, btn) {
+  document.getElementById('admin-users').classList.toggle('hidden', tab !== 'users');
+  document.getElementById('admin-reports').classList.toggle('hidden', tab !== 'reports');
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  if (tab === 'reports') loadReports();
+}
+
+async function loadStats() {
+  try {
+    const s = await apiFetch('/admin/stats');
+    document.getElementById('admin-stats').innerHTML = `
+      <div class="stat-card"><div class="stat-value">${s.totalUsers}</div><div class="stat-label">Total users</div></div>
+      <div class="stat-card"><div class="stat-value">${s.mentors}</div><div class="stat-label">Mentors</div></div>
+      <div class="stat-card"><div class="stat-value">${s.mentees}</div><div class="stat-label">Mentees</div></div>
+      <div class="stat-card"><div class="stat-value">${s.sessions}</div><div class="stat-label">Sessions</div></div>
+      <div class="stat-card"><div class="stat-value">${s.completedSessions}</div><div class="stat-label">Completed</div></div>
+      <div class="stat-card"><div class="stat-value">${s.requests}</div><div class="stat-label">Matches</div></div>
+      <div class="stat-card"><div class="stat-value">${s.posts}</div><div class="stat-label">Posts</div></div>`;
+  } catch {}
+}
+
+async function loadUsers() {
+  const tbody = document.getElementById('users-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--gray-400)">Loading…</td></tr>';
+  try {
+    const role = document.getElementById('role-filter').value;
+    const search = document.getElementById('user-search').value;
+    let url = `/admin/users?page=${userPage}`;
+    if (role) url += `&role=${role}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    const { users, total } = await apiFetch(url);
+
+    tbody.innerHTML = users.map(u => `
+      <tr>
+        <td><div class="user-cell">
+          <div class="avatar avatar-sm">${avatarHTML(u)}</div>
+          <div><div class="font-semibold">${u.name}</div><div class="text-xs text-muted">${u.email}</div></div>
+        </div></td>
+        <td><span class="badge ${u.role === 'mentor' ? 'badge-primary' : u.role === 'admin' ? 'badge-danger' : 'badge-gray'}">${u.role}</span></td>
+        <td>${u.department || '—'}</td>
+        <td>${formatDate(u.createdAt)}</td>
+        <td>
+          ${u.isBanned ? '<span class="badge badge-danger">Banned</span>' : '<span class="badge badge-success">Active</span>'}
+          ${u.isVerified ? '<span class="badge badge-accent" style="margin-left:4px">Verified</span>' : ''}
+        </td>
+        <td>
+          <div class="flex gap-2">
+            <button class="btn btn-outline btn-sm" onclick="toggleBan('${u._id}', ${u.isBanned}, this)">
+              ${u.isBanned ? 'Unban' : 'Ban'}
+            </button>
+            ${u.role === 'mentor' && !u.isVerified ? `<button class="btn btn-success btn-sm" onclick="verifyUser('${u._id}', this)">Verify</button>` : ''}
+          </div>
+        </td>
+      </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--gray-400)">No users found</td></tr>';
+
+    // Pagination
+    const totalPages = Math.ceil(total / 20);
+    const pag = document.getElementById('users-pagination');
+    pag.innerHTML = totalPages > 1 ? Array.from({ length: totalPages }, (_, i) =>
+      `<button class="btn btn-sm ${i + 1 === userPage ? 'btn-primary' : 'btn-outline'}" onclick="goPage(${i + 1})">${i + 1}</button>`
+    ).join('') : '';
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--danger)">${err.message}</td></tr>`;
+  }
+}
+
+function goPage(p) { userPage = p; loadUsers(); }
+
+async function toggleBan(id, isBanned, btn) {
+  try {
+    const { isBanned: newState } = await apiFetch(`/admin/users/${id}/ban`, { method: 'PUT' });
+    btn.textContent = newState ? 'Unban' : 'Ban';
+    showToast(newState ? 'User banned' : 'User unbanned', 'info');
+    loadUsers();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function verifyUser(id, btn) {
+  try {
+    await apiFetch(`/admin/users/${id}/verify`, { method: 'PUT' });
+    btn.textContent = 'Verified ✓'; btn.disabled = true;
+    showToast('Mentor verified!', 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function loadReports() {
+  const container = document.getElementById('reported-posts');
+  try {
+    const posts = await apiFetch('/admin/reports');
+    if (!posts.length) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">No reported posts</div></div>'; return; }
+    container.innerHTML = posts.map(p => `
+      <div class="post-card" style="margin-bottom:12px">
+        <div class="post-author">
+          <div class="avatar avatar-sm">${avatarHTML(p.author)}</div>
+          <div><div class="post-name">${p.author.name}</div><div class="post-dept">${p.author.email}</div></div>
+          <span class="post-time">${timeAgo(p.createdAt)}</span>
+        </div>
+        <div class="post-title">${p.title}</div>
+        <div class="post-content">${p.content.substring(0, 200)}…</div>
+        <div class="flex gap-2 mt-4">
+          <button class="btn btn-danger btn-sm" onclick="deletePost('${p._id}')">Delete post</button>
+          <button class="btn btn-outline btn-sm" onclick="pinPost('${p._id}', this)">📌 Pin</button>
+        </div>
+      </div>`).join('');
+  } catch (err) { container.innerHTML = `<div class="text-danger">${err.message}</div>`; }
+}
+
+async function deletePost(id) {
+  if (!confirm('Delete this post?')) return;
+  try { await apiFetch(`/admin/posts/${id}`, { method: 'DELETE' }); showToast('Post deleted', 'info'); loadReports(); }
+  catch (err) { showToast(err.message, 'error'); }
+}
+
+async function pinPost(id, btn) {
+  try {
+    const { isPinned } = await apiFetch(`/admin/posts/${id}/pin`, { method: 'PUT' });
+    btn.textContent = isPinned ? '📌 Unpin' : '📌 Pin';
+    showToast(isPinned ? 'Post pinned' : 'Post unpinned', 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+loadStats();
+loadUsers();
+</script>
+</body>
+</html>

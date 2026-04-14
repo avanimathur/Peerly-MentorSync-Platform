@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Find Mentors – Peerly</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/main.css">
+<style>
+.filters { background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius);
+  padding: 16px 20px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.filters .form-group { margin: 0; flex: 1; min-width: 130px; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content" id="page-wrap">
+      <!-- Access guard message shown to mentors -->
+      <div id="access-denied" class="hidden">
+        <div class="empty-state">
+          <div class="empty-icon">🔒</div>
+          <div class="empty-title">Mentors don't browse for mentees here</div>
+          <div class="empty-desc">Students will send you requests — check the Requests page.</div>
+          <a href="requests.html" class="btn btn-primary">View Requests</a>
+        </div>
+      </div>
+
+      <div id="main-content">
+        <div class="filters">
+          <div class="form-group">
+            <label class="form-label">Search</label>
+            <input type="text" id="search" class="form-control" placeholder="Name, bio, department…">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Department</label>
+            <input type="text" id="dept-filter" class="form-control" placeholder="Any department">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Sort by</label>
+            <select id="sort-filter" class="form-control">
+              <option value="match">Best match</option>
+              <option value="rating">Rating</option>
+              <option value="sessions">Most sessions</option>
+            </select>
+          </div>
+          <button class="btn btn-secondary" onclick="loadMentors()">Search</button>
+          <button class="btn btn-primary" onclick="loadMentors(true)">⚡ Smart match</button>
+        </div>
+        <div id="mentor-count" class="text-sm text-muted mb-4"></div>
+        <div class="mentor-grid" id="mentor-grid">
+          <div style="padding:40px;text-align:center;color:var(--gray-400);grid-column:1/-1">Loading mentors…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Request Modal -->
+<div class="modal-overlay hidden" id="request-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Send Mentorship Request</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('request-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="request-mentor-info" class="flex gap-3 items-center mb-4"></div>
+      <input type="hidden" id="req-mentor-id">
+      <div class="form-group">
+        <label class="form-label">Message <span class="text-muted">(optional)</span></label>
+        <textarea id="req-message" class="form-control" rows="3" placeholder="Introduce yourself and explain what you'd like to learn…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Your goals <span class="text-muted">(optional)</span></label>
+        <textarea id="req-goals" class="form-control" rows="2" placeholder="What do you hope to achieve?"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('request-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="sendRequest()" id="send-req-btn">Send request</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/utils.js"></script>
+<script src="../js/page.js"></script>
+<script>
+initPage('mentors', 'Find Mentors');
+const user = getUser();
+
+// Mentors should not access this page's functionality
+if (user && user.role === 'mentor') {
+  document.getElementById('access-denied').classList.remove('hidden');
+  document.getElementById('main-content').classList.add('hidden');
+}
+
+let savedIds = [];
+
+async function loadMentors(smart = false) {
+  if (user?.role === 'mentor') return;
+  const grid = document.getElementById('mentor-grid');
+  grid.innerHTML = '<div style="padding:40px;text-align:center;color:var(--gray-400);grid-column:1/-1">Loading…</div>';
+  try {
+    const search = document.getElementById('search').value.trim();
+    const dept   = document.getElementById('dept-filter').value.trim();
+    const sort   = document.getElementById('sort-filter').value;
+
+    let mentors;
+    if (smart) {
+      mentors = await apiFetch('/match/mentors');
+    } else {
+      let q = '/users/mentors?';
+      if (search) q += `search=${encodeURIComponent(search)}&`;
+      if (dept)   q += `department=${encodeURIComponent(dept)}&`;
+      mentors = await apiFetch(q);
+    }
+
+    if (sort === 'rating')   mentors.sort((a, b) => (b.avgRating || 0) - (a.avgRating || 0));
+    if (sort === 'sessions') mentors.sort((a, b) => (b.totalSessions || 0) - (a.totalSessions || 0));
+
+    const saved = await apiFetch('/users/saved/list').catch(() => []);
+    savedIds = saved.map(s => s._id);
+
+    document.getElementById('mentor-count').textContent =
+      `${mentors.length} mentor${mentors.length !== 1 ? 's' : ''} found${smart ? ' (smart match)' : ''}`;
+
+    if (!mentors.length) {
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">👥</div><div class="empty-title">No mentors found</div><div class="empty-desc">Try adjusting your filters</div></div>';
+      return;
+    }
+
+    grid.innerHTML = mentors.map(m => `
+      <div class="mentor-card">
+        <div class="mentor-card-header">
+          <div class="avatar avatar-lg">${avatarHTML(m)}</div>
+          <div class="mentor-card-meta">
+            <div class="mentor-name">${m.name}${m.isVerified ? ' <span style="color:var(--primary);font-size:12px">✓ Verified</span>' : ''}</div>
+            <div class="mentor-dept">${[m.department, m.year].filter(Boolean).join(' · ')}</div>
+            ${m.avgRating ? `<div class="mentor-rating">${starsHTML(m.avgRating)} ${m.avgRating} (${m.reviewCount})</div>` : ''}
+            ${m.matchScore !== undefined ? `<div class="match-score">⚡ ${m.matchScore} match score</div>` : ''}
+          </div>
+        </div>
+        ${m.bio ? `<div class="mentor-bio">${m.bio}</div>` : ''}
+        ${m.skills?.length ? `<div class="mentor-skills">${m.skills.slice(0,5).map(s => `<span class="tag tag-primary">${s}</span>`).join('')}</div>` : ''}
+        ${m.sharedSkills?.length ? `<div class="text-xs text-muted mb-4">Shared skills: ${m.sharedSkills.join(', ')}</div>` : ''}
+        <div class="mentor-actions" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" style="flex:1" onclick="openRequest('${m._id}','${(m.name||'').replace(/'/g,"\\'")}','${m.avatar||''}','${m.department||''}')">
+            Request
+          </button>
+          <button class="btn btn-outline btn-sm" id="save-btn-${m._id}" onclick="toggleSave('${m._id}',this)">
+            ${savedIds.includes(m._id) ? '💾 Saved' : '🔖 Save'}
+          </button>
+          <a href="profile-view.html?id=${m._id}" class="btn btn-ghost btn-sm">View</a>
+        </div>
+      </div>`).join('');
+  } catch (err) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-title">Failed to load</div><p class="text-sm text-muted">${err.message}</p></div>`;
+  }
+}
+
+function openRequest(id, name, avatar, dept) {
+  document.getElementById('req-mentor-id').value = id;
+  document.getElementById('request-mentor-info').innerHTML = `
+    <div class="avatar">${avatarHTML({ name, avatar })}</div>
+    <div><div class="font-semibold">${name}</div><div class="text-sm text-muted">${dept}</div></div>`;
+  document.getElementById('req-message').value = '';
+  document.getElementById('req-goals').value = '';
+  openModal('request-modal');
+}
+
+async function sendRequest() {
+  const btn = document.getElementById('send-req-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await apiFetch('/requests', {
+      method: 'POST',
+      body: JSON.stringify({
+        to: document.getElementById('req-mentor-id').value,
+        message: document.getElementById('req-message').value,
+        goals: document.getElementById('req-goals').value
+      })
+    });
+    closeModal('request-modal');
+    showToast('Request sent! 🎉', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send request';
+  }
+}
+
+async function toggleSave(mentorId, btn) {
+  try {
+    await apiFetch(`/users/save/${mentorId}`, { method: 'POST' });
+    const isSaved = savedIds.includes(mentorId);
+    if (isSaved) { savedIds = savedIds.filter(id => id !== mentorId); btn.textContent = '🔖 Save'; }
+    else { savedIds.push(mentorId); btn.textContent = '💾 Saved'; }
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+document.getElementById('search').addEventListener('keydown', e => { if (e.key === 'Enter') loadMentors(); });
+
+if (user?.role !== 'mentor') loadMentors();
+</script>
+</body>
+</html>

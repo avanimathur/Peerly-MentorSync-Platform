@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard – Peerly</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/main.css">
+<style>
+.welcome-banner { background: linear-gradient(135deg, var(--primary) 0%, #8b5cf6 100%);
+  border-radius: var(--radius-lg); padding: 28px 32px; color: white; margin-bottom: 24px;
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.welcome-banner h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.welcome-banner p { font-size: 14px; opacity: 0.85; }
+.welcome-emoji { font-size: 52px; }
+.quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.quick-action { background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius);
+  padding: 18px 12px; text-align: center; cursor: pointer; transition: all var(--transition); text-decoration: none; color: inherit; display: block; }
+.quick-action:hover { border-color: var(--primary); box-shadow: var(--shadow); transform: translateY(-2px); }
+.qa-icon { font-size: 26px; margin-bottom: 6px; }
+.qa-label { font-size: 13px; font-weight: 600; color: var(--gray-700); }
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.section-header h3 { font-size: 16px; font-weight: 700; }
+.badge-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.badge-item { background: var(--primary-light); border-radius: 20px; padding: 6px 12px;
+  display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--primary); }
+.mentor-only { /* shown only to mentors */ }
+.mentee-only { /* shown only to mentees */ }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content" id="content">
+      <div style="text-align:center;padding:60px;color:var(--gray-400)">Loading…</div>
+    </div>
+  </div>
+</div>
+<script src="../js/utils.js"></script>
+<script src="../js/page.js"></script>
+<script>
+initPage('dashboard', 'Dashboard');
+const user = getUser();
+
+async function loadDashboard() {
+  const content = document.getElementById('content');
+  const isMentor = user.role === 'mentor';
+  const isMentee = user.role === 'mentee';
+
+  try {
+    // Fetch data relevant to each role
+    const promises = [
+      apiFetch('/sessions').catch(() => []),
+      apiFetch('/goals').catch(() => []),
+    ];
+    if (isMentor) promises.push(apiFetch('/requests/incoming').catch(() => []));
+    if (isMentee) promises.push(apiFetch('/requests/sent').catch(() => []));
+
+    const [sessions, goals, requests] = await Promise.all(promises);
+
+    const now = new Date();
+    const upcomingSessions = sessions.filter(s => s.status === 'confirmed' && new Date(s.scheduledAt) >= now).slice(0, 3);
+    const pendingSessions  = sessions.filter(s => s.status === 'pending');
+    const activeGoals      = goals.filter(g => g.status === 'active');
+    const pendingRequests  = (requests || []).filter(r => r.status === 'pending');
+
+    // Role-specific quick actions
+    const menteeActions = `
+      <a href="mentors.html" class="quick-action"><div class="qa-icon">👥</div><div class="qa-label">Find mentors</div></a>
+      <a href="sessions.html" class="quick-action"><div class="qa-icon">📅</div><div class="qa-label">Book session</div></a>
+      <a href="goals.html" class="quick-action"><div class="qa-icon">🎯</div><div class="qa-label">My goals</div></a>
+      <a href="messages.html" class="quick-action"><div class="qa-icon">💬</div><div class="qa-label">Messages</div></a>
+      <a href="resources.html" class="quick-action"><div class="qa-icon">📚</div><div class="qa-label">Resources</div></a>
+      <a href="community.html" class="quick-action"><div class="qa-icon">🏛️</div><div class="qa-label">Community</div></a>`;
+
+    const mentorActions = `
+      <a href="requests.html" class="quick-action"><div class="qa-icon">📨</div><div class="qa-label">Requests${pendingRequests.length ? ` (${pendingRequests.length})` : ''}</div></a>
+      <a href="sessions.html" class="quick-action"><div class="qa-icon">📅</div><div class="qa-label">Sessions${pendingSessions.length ? ` (${pendingSessions.length})` : ''}</div></a>
+      <a href="goals.html" class="quick-action"><div class="qa-icon">🎯</div><div class="qa-label">Goals</div></a>
+      <a href="messages.html" class="quick-action"><div class="qa-icon">💬</div><div class="qa-label">Messages</div></a>
+      <a href="resources.html" class="quick-action"><div class="qa-icon">📚</div><div class="qa-label">Resources</div></a>
+      <a href="community.html" class="quick-action"><div class="qa-icon">🏛️</div><div class="qa-label">Community</div></a>`;
+
+    // Role-specific stat cards
+    const menteeStats = `
+      <div class="stat-card"><div class="stat-value">${user.totalSessions || 0}</div><div class="stat-label">Sessions done</div></div>
+      <div class="stat-card"><div class="stat-value">${activeGoals.length}</div><div class="stat-label">Active goals</div></div>
+      <div class="stat-card"><div class="stat-value">${pendingRequests.filter(r=>r.status==='pending').length}</div><div class="stat-label">Pending requests</div></div>
+      <div class="stat-card"><div class="stat-value">${user.totalGoalsCompleted || 0}</div><div class="stat-label">Goals completed</div></div>`;
+
+    const mentorStats = `
+      <div class="stat-card"><div class="stat-value">${user.totalSessions || 0}</div><div class="stat-label">Sessions done</div></div>
+      <div class="stat-card"><div class="stat-value">${user.menteeCount || 0}</div><div class="stat-label">Active mentees</div></div>
+      <div class="stat-card"><div class="stat-value">${pendingRequests.length}</div><div class="stat-label">New requests</div></div>
+      <div class="stat-card"><div class="stat-value">${user.reputationScore || 0}</div><div class="stat-label">Reputation</div></div>`;
+
+    content.innerHTML = `
+      <div class="welcome-banner">
+        <div>
+          <h2>Welcome back, ${user.name.split(' ')[0]}! 👋</h2>
+          <p>${isMentor
+            ? `You have ${pendingRequests.length} pending request${pendingRequests.length !== 1 ? 's' : ''} and ${upcomingSessions.length} upcoming session${upcomingSessions.length !== 1 ? 's' : ''}.`
+            : `You have ${upcomingSessions.length} upcoming session${upcomingSessions.length !== 1 ? 's' : ''} and ${activeGoals.length} active goal${activeGoals.length !== 1 ? 's' : ''}.`
+          }</p>
+        </div>
+        <div class="welcome-emoji">${isMentor ? '🌟' : '🚀'}</div>
+      </div>
+
+      <div class="stats-grid">${isMentor ? mentorStats : menteeStats}</div>
+      <div class="quick-actions">${isMentor ? mentorActions : menteeActions}</div>
+
+      <div class="grid-2" style="gap:20px">
+        <div>
+          <div class="section-header">
+            <h3>Upcoming Sessions</h3>
+            <a href="sessions.html" class="btn btn-ghost btn-sm">View all</a>
+          </div>
+          ${upcomingSessions.length ? upcomingSessions.map(s => {
+            const other = isMentor ? s.mentee : s.mentor;
+            const dt = new Date(s.scheduledAt);
+            return `<div class="session-card">
+              <div class="session-date">
+                <div class="day">${dt.getDate()}</div>
+                <div class="month">${dt.toLocaleDateString('en',{month:'short'})}</div>
+              </div>
+              <div class="session-info">
+                <div class="session-title">${s.title}</div>
+                <div class="session-meta">with ${other?.name || '?'} · ${dt.toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})}</div>
+                ${s.meetLink ? `<a href="${s.meetLink}" target="_blank" class="btn btn-primary btn-sm" style="margin-top:6px">Join call</a>` : ''}
+              </div>
+            </div>`;
+          }).join('')
+          : `<div class="empty-state" style="padding:30px">
+              <div class="empty-icon">📅</div>
+              <div class="empty-title">No upcoming sessions</div>
+              ${isMentee ? '<a href="sessions.html" class="btn btn-primary btn-sm">Schedule one</a>' : '<p class="text-sm text-muted">Sessions you confirm will appear here</p>'}
+            </div>`}
+
+          ${isMentor && pendingRequests.length ? `
+            <div class="section-header mt-4">
+              <h3>Pending Requests</h3>
+              <a href="requests.html" class="btn btn-ghost btn-sm">View all</a>
+            </div>
+            ${pendingRequests.slice(0,2).map(r => `
+              <div class="session-card" style="border-color:var(--warning)">
+                <div class="avatar">${avatarHTML(r.from)}</div>
+                <div class="session-info">
+                  <div class="session-title">${r.from.name}</div>
+                  <div class="session-meta">${r.from.department || ''} · ${timeAgo(r.createdAt)}</div>
+                </div>
+                <div style="display:flex;gap:6px">
+                  <a href="requests.html" class="btn btn-success btn-sm">Review</a>
+                </div>
+              </div>`).join('')}` : ''}
+        </div>
+
+        <div>
+          <div class="section-header">
+            <h3>${isMentor ? "Mentees' Goals" : 'Active Goals'}</h3>
+            <a href="goals.html" class="btn btn-ghost btn-sm">View all</a>
+          </div>
+          ${activeGoals.slice(0, 3).map(g => {
+            const done = g.milestones.filter(m => m.done).length;
+            const total = g.milestones.length;
+            const pct = total ? Math.round(done / total * 100) : 0;
+            return `<div class="goal-card">
+              <div class="goal-header">
+                <div class="goal-title">${g.title}</div>
+                <span class="badge badge-primary">${g.category}</span>
+              </div>
+              <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+              <div class="text-sm text-muted">${done}/${total} milestones · ${pct}%</div>
+            </div>`;
+          }).join('') || `<div class="empty-state" style="padding:30px">
+            <div class="empty-icon">🎯</div>
+            <div class="empty-title">No active goals</div>
+            <a href="goals.html" class="btn btn-primary btn-sm">Set a goal</a>
+          </div>`}
+
+          ${user.badges?.length ? `
+            <div class="section-header mt-4"><h3>Badges</h3></div>
+            <div class="badge-list">
+              ${user.badges.map(b => `<div class="badge-item">🏆 ${b.name}</div>`).join('')}
+            </div>` : ''}
+        </div>
+      </div>`;
+  } catch (err) {
+    content.innerHTML = `<div class="empty-state"><div class="empty-title">Failed to load</div><p class="text-sm text-muted">${err.message}</p><button class="btn btn-primary btn-sm mt-4" onclick="loadDashboard()">Retry</button></div>`;
+  }
+}
+
+loadDashboard();
+</script>
+</body>
+</html>

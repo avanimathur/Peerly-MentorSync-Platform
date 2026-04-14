@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Community – Peerly</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content" style="max-width:800px">
+      <div class="flex justify-between items-center mb-6">
+        <div class="flex gap-2" style="flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="filterCat('',this)" style="background:var(--primary-light);color:var(--primary)">All</button>
+          <button class="btn btn-ghost btn-sm" onclick="filterCat('discussion',this)">Discussion</button>
+          <button class="btn btn-ghost btn-sm" onclick="filterCat('question',this)">Q&A</button>
+          <button class="btn btn-ghost btn-sm" onclick="filterCat('kudos',this)">Kudos 🏆</button>
+          <button class="btn btn-ghost btn-sm" onclick="filterCat('resource',this)">Resources</button>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('new-post-modal')">+ Post</button>
+      </div>
+      <input type="text" class="form-control mb-6" id="search-posts" placeholder="Search posts…" oninput="loadPosts()">
+      <div id="posts-container"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="new-post-modal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Create Post</span><button class="btn btn-ghost btn-icon" onclick="closeModal('new-post-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Category</label>
+          <select id="post-cat" class="form-control">
+            <option value="discussion">Discussion</option><option value="question">Question</option>
+            <option value="kudos">Kudos 🏆</option><option value="resource">Resource</option><option value="general">General</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Department (optional)</label><input type="text" id="post-dept" class="form-control" placeholder="e.g. Computer Science"></div>
+      </div>
+      <div class="form-group" id="kudos-field" style="display:none"><label class="form-label">Kudos to (name)</label><input type="text" id="kudos-search" class="form-control" placeholder="Search user…" oninput="searchKudosUser(this.value)"><div id="kudos-suggestions"></div><input type="hidden" id="kudos-user-id"></div>
+      <div class="form-group"><label class="form-label">Title</label><input type="text" id="post-title" class="form-control" placeholder="Post title"></div>
+      <div class="form-group"><label class="form-label">Content</label><textarea id="post-content" class="form-control" rows="4" placeholder="Share your thoughts…"></textarea></div>
+      <div class="form-group"><label class="form-label">Tags (comma separated)</label><input type="text" id="post-tags" class="form-control" placeholder="mentoring, career, tips"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('new-post-modal')">Cancel</button><button class="btn btn-primary" onclick="createPost()">Post</button></div>
+  </div>
+</div>
+
+<script src="../js/utils.js"></script>
+<script src="../js/page.js"></script>
+<script>
+initPage('community', 'Community');
+const me = getUser();
+let catFilter = '';
+
+function filterCat(cat, btn) {
+  catFilter = cat;
+  document.querySelectorAll('.btn-ghost.btn-sm').forEach(b => { b.style.background=''; b.style.color=''; });
+  btn.style.background = 'var(--primary-light)'; btn.style.color = 'var(--primary)';
+  loadPosts();
+}
+
+async function loadPosts() {
+  const container = document.getElementById('posts-container');
+  container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray-400)">Loading…</div>';
+  try {
+    let url = '/community?';
+    if (catFilter) url += `category=${catFilter}&`;
+    const search = document.getElementById('search-posts').value;
+    if (search) url += `search=${encodeURIComponent(search)}&`;
+    const { posts } = await apiFetch(url);
+
+    if (!posts.length) {
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">🏛️</div><div class="empty-title">No posts yet</div><div class="empty-desc">Be the first to post!</div></div>';
+      return;
+    }
+    container.innerHTML = posts.map(p => renderPost(p)).join('');
+  } catch (err) { container.innerHTML = `<div class="empty-state"><div class="empty-title">Error: ${err.message}</div></div>`; }
+}
+
+function renderPost(p) {
+  const catBadges = { discussion: 'badge-primary', question: 'badge-warning', kudos: 'badge-success', resource: 'badge-accent', general: 'badge-gray' };
+  const liked = p.likes?.includes(me._id);
+  return `<div class="post-card" id="post-${p._id}">
+    ${p.isPinned ? '<div class="badge badge-warning mb-4">📌 Pinned</div>' : ''}
+    <div class="post-author">
+      <div class="avatar avatar-sm">${avatarHTML(p.author)}</div>
+      <div>
+        <div class="post-name">${p.author.name} <span class="badge badge-gray" style="font-size:10px">${p.author.role}</span></div>
+        <div class="post-dept">${p.author.department||''}</div>
+      </div>
+      <span class="badge ${catBadges[p.category]||'badge-gray'}" style="margin-left:8px">${p.category}</span>
+      <span class="post-time">${timeAgo(p.createdAt)}</span>
+    </div>
+    ${p.kudosTo ? `<div class="mb-4 p-3" style="background:var(--accent-light);border-radius:10px;font-size:14px">🏆 Kudos to <strong>${p.kudosTo.name}</strong>!</div>` : ''}
+    <div class="post-title">${p.title}</div>
+    <div class="post-content">${p.content}</div>
+    ${p.tags?.length ? `<div class="flex gap-1" style="flex-wrap:wrap;margin-bottom:8px">${p.tags.map(t=>`<span class="tag">#${t}</span>`).join('')}</div>` : ''}
+    <div class="post-actions">
+      <button class="post-action-btn ${liked ? 'liked' : ''}" onclick="likePost('${p._id}',this)">
+        ♥ <span class="like-count">${p.likes?.length||0}</span>
+      </button>
+      <button class="post-action-btn" onclick="toggleComments('${p._id}')">💬 ${p.comments?.length||0} comments</button>
+      <button class="post-action-btn" onclick="reportPost('${p._id}')">🚩 Report</button>
+      ${p.author._id === me._id ? `<button class="post-action-btn" style="margin-left:auto" onclick="deletePost('${p._id}')">🗑 Delete</button>` : ''}
+    </div>
+    <div class="comments-section hidden" id="comments-${p._id}">
+      ${(p.comments||[]).map(c => `
+        <div class="comment">
+          <div class="avatar avatar-sm">${avatarHTML(c.author)}</div>
+          <div class="comment-body">
+            <div class="comment-author">${c.author.name} <span class="text-xs text-muted">${timeAgo(c.createdAt)}</span></div>
+            <div class="comment-text">${c.content}</div>
+          </div>
+        </div>`).join('')}
+      <div class="flex gap-2 mt-4">
+        <div class="avatar avatar-sm">${avatarHTML(me)}</div>
+        <input type="text" class="form-control" id="comment-input-${p._id}" placeholder="Add a comment…" onkeydown="if(event.key==='Enter')addComment('${p._id}')">
+        <button class="btn btn-primary btn-sm" onclick="addComment('${p._id}')">Post</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleComments(id) { document.getElementById(`comments-${id}`)?.classList.toggle('hidden'); }
+
+async function likePost(id, btn) {
+  try {
+    const { likes } = await apiFetch(`/community/${id}/like`, { method: 'POST' });
+    btn.querySelector('.like-count').textContent = likes;
+    btn.classList.toggle('liked');
+  } catch {}
+}
+
+async function addComment(postId) {
+  const input = document.getElementById(`comment-input-${postId}`);
+  const content = input.value.trim();
+  if (!content) return;
+  try {
+    await apiFetch(`/community/${postId}/comment`, { method: 'POST', body: JSON.stringify({ content }) });
+    input.value = '';
+    loadPosts();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function createPost() {
+  try {
+    await apiFetch('/community', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: document.getElementById('post-title').value,
+        content: document.getElementById('post-content').value,
+        category: document.getElementById('post-cat').value,
+        department: document.getElementById('post-dept').value,
+        tags: document.getElementById('post-tags').value.split(',').map(t=>t.trim()).filter(Boolean),
+        kudosTo: document.getElementById('kudos-user-id').value || undefined
+      })
+    });
+    closeModal('new-post-modal');
+    showToast('Posted!', 'success');
+    loadPosts();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function reportPost(id) {
+  try { await apiFetch(`/community/${id}/report`, { method: 'POST' }); showToast('Reported to admin', 'info'); }
+  catch {}
+}
+
+async function deletePost(id) {
+  if (!confirm('Delete this post?')) return;
+  try { await apiFetch(`/community/${id}`, { method: 'DELETE' }); showToast('Deleted', 'info'); loadPosts(); }
+  catch (err) { showToast(err.message, 'error'); }
+}
+
+async function searchKudosUser(q) {
+  const box = document.getElementById('kudos-suggestions');
+  if (!q.trim()) { box.innerHTML = ''; return; }
+  try {
+    const mentors = await apiFetch(`/users/mentors?search=${encodeURIComponent(q)}`);
+    box.innerHTML = mentors.slice(0, 5).map(u =>
+      `<div style="padding:8px 12px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:center"
+        onmousedown="selectKudosUser('${u._id}','${(u.name||'').replace(/'/g,"\\'")}')">
+        <div class="avatar avatar-sm">${avatarHTML(u)}</div>
+        <div><strong>${u.name}</strong> <span style="color:var(--gray-500)">${u.department || ''}</span></div>
+      </div>`
+    ).join('');
+    box.style.border = mentors.length ? '1px solid var(--gray-200)' : 'none';
+    box.style.borderRadius = '8px';
+    box.style.marginTop = '4px';
+  } catch {}
+}
+
+function selectKudosUser(id, name) {
+  document.getElementById('kudos-user-id').value = id;
+  document.getElementById('kudos-search').value = name;
+  document.getElementById('kudos-suggestions').innerHTML = '';
+}
+
+document.getElementById('post-cat').addEventListener('change', function() {
+  document.getElementById('kudos-field').style.display = this.value === 'kudos' ? 'block' : 'none';
+});
+
+loadPosts();
+</script>
+</body>
+</html>

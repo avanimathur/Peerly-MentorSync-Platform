@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Requests – Peerly</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/main.css">
+<style>
+.request-card { background: var(--white); border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 20px; margin-bottom: 12px; display: flex; gap: 14px; align-items: flex-start; transition: box-shadow var(--transition); }
+.request-card:hover { box-shadow: var(--shadow); }
+.request-card.pending { border-left: 3px solid var(--warning); }
+.request-card.accepted { border-left: 3px solid var(--success); }
+.request-card.rejected { border-left: 3px solid var(--gray-300); opacity: 0.7; }
+.request-info { flex: 1; min-width: 0; }
+.request-name { font-size: 15px; font-weight: 600; }
+.request-meta { font-size: 13px; color: var(--gray-500); margin-top: 2px; }
+.request-message { font-size: 14px; color: var(--gray-700); margin-top: 8px; background: var(--gray-50); border-radius: 8px; padding: 10px 12px; border-left: 3px solid var(--gray-300); }
+.request-goals { font-size: 13px; color: var(--gray-600); margin-top: 6px; }
+.request-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content">
+      <!-- Mentors see incoming requests. Mentees see sent requests. Tabs differ. -->
+      <div id="tabs-area" class="mb-6"></div>
+      <div id="requests-list"></div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/utils.js"></script>
+<script src="../js/page.js"></script>
+<script>
+initPage('requests', 'Requests');
+const user = getUser();
+const isMentor = user?.role === 'mentor';
+const isMentee = user?.role === 'mentee';
+
+// Mentors only see incoming. Mentees see sent + can browse accepted.
+// Build tabs accordingly:
+let currentTab = isMentor ? 'incoming' : 'sent';
+
+function buildTabs() {
+  const area = document.getElementById('tabs-area');
+  if (isMentor) {
+    // Mentors: Pending | Accepted | All
+    area.innerHTML = `
+      <div class="flex justify-between items-center">
+        <div class="tabs" style="margin:0">
+          <button class="tab active" onclick="filterTab('pending',this)">Pending</button>
+          <button class="tab" onclick="filterTab('accepted',this)">Accepted</button>
+          <button class="tab" onclick="filterTab('all',this)">All</button>
+        </div>
+      </div>`;
+  } else {
+    // Mentees: Sent (pending/accepted/rejected)
+    area.innerHTML = `
+      <div class="flex justify-between items-center">
+        <div class="tabs" style="margin:0">
+          <button class="tab active" onclick="filterTab('pending',this)">Pending</button>
+          <button class="tab" onclick="filterTab('accepted',this)">Accepted</button>
+          <button class="tab" onclick="filterTab('rejected',this)">Declined</button>
+        </div>
+        <a href="mentors.html" class="btn btn-primary btn-sm">+ Find mentors</a>
+      </div>`;
+  }
+}
+
+let allRequests = [];
+let tabFilter = 'pending';
+
+function filterTab(status, btn) {
+  tabFilter = status;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderRequests();
+}
+
+async function loadRequests() {
+  const list = document.getElementById('requests-list');
+  list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray-400)">Loading…</div>';
+  try {
+    if (isMentor) {
+      allRequests = await apiFetch('/requests/incoming');
+    } else {
+      allRequests = await apiFetch('/requests/sent');
+    }
+    renderRequests();
+  } catch (err) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-title">Error loading requests</div><p class="text-sm text-muted">${err.message}</p></div>`;
+  }
+}
+
+function renderRequests() {
+  const list = document.getElementById('requests-list');
+  const filtered = tabFilter === 'all' ? allRequests : allRequests.filter(r => r.status === tabFilter);
+  const statusColors = { pending: 'badge-warning', accepted: 'badge-success', rejected: 'badge-danger' };
+
+  if (!filtered.length) {
+    const msgs = {
+      pending: isMentor ? 'No pending requests right now' : 'No pending requests — find a mentor to get started!',
+      accepted: isMentor ? 'No accepted mentees yet' : 'No accepted requests yet',
+      rejected: 'No declined requests',
+      all: isMentor ? 'No requests received yet' : 'You have not sent any requests yet'
+    };
+    list.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">${isMentor ? '📨' : '📤'}</div>
+      <div class="empty-title">${msgs[tabFilter]}</div>
+      ${isMentee && tabFilter === 'pending' ? '<a href="mentors.html" class="btn btn-primary btn-sm">Find mentors</a>' : ''}
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(r => {
+    const other = isMentor ? r.from : r.to;
+    if (!other) return '';
+    return `<div class="request-card ${r.status}">
+      <div class="avatar avatar-lg">${avatarHTML(other)}</div>
+      <div class="request-info">
+        <div class="flex items-center gap-2" style="flex-wrap:wrap">
+          <div class="request-name">${other.name}</div>
+          <span class="badge ${statusColors[r.status] || 'badge-gray'}">${r.status}</span>
+          ${other.isVerified ? '<span style="font-size:12px;color:var(--primary)">✓ Verified</span>' : ''}
+        </div>
+        <div class="request-meta">
+          ${[other.department, other.year].filter(Boolean).join(' · ')}
+          ${other.department || other.year ? ' · ' : ''}${timeAgo(r.createdAt)}
+        </div>
+        ${other.skills?.length ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">${other.skills.slice(0,4).map(s => `<span class="tag tag-primary">${s}</span>`).join('')}</div>` : ''}
+        ${r.message ? `<div class="request-message">"${r.message}"</div>` : ''}
+        ${r.goals ? `<div class="request-goals" style="margin-top:6px"><strong>Goals:</strong> ${r.goals}</div>` : ''}
+
+        <div class="request-actions">
+          ${isMentor && r.status === 'pending' ? `
+            <button class="btn btn-success btn-sm" onclick="respond('${r._id}','accepted')">✓ Accept</button>
+            <button class="btn btn-danger btn-sm" onclick="respond('${r._id}','rejected')">✕ Decline</button>
+            <a href="profile-view.html?id=${other._id}" class="btn btn-outline btn-sm">View profile</a>` : ''}
+          ${r.status === 'accepted' ? `
+            <a href="messages.html?with=${other._id}&name=${encodeURIComponent(other.name)}" class="btn btn-primary btn-sm">💬 Message</a>
+            <a href="sessions.html" class="btn btn-outline btn-sm">📅 Sessions</a>
+            <a href="profile-view.html?id=${other._id}" class="btn btn-ghost btn-sm">View profile</a>` : ''}
+          ${isMentee && r.status === 'pending' ? `
+            <a href="profile-view.html?id=${other._id}" class="btn btn-ghost btn-sm">View profile</a>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function respond(id, status) {
+  try {
+    await apiFetch(`/requests/${id}`, { method: 'PUT', body: JSON.stringify({ status }) });
+    showToast(status === 'accepted' ? 'Request accepted! 🎉' : 'Request declined', status === 'accepted' ? 'success' : 'info');
+    loadRequests();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+buildTabs();
+loadRequests();
+</script>
+</body>
+</html>

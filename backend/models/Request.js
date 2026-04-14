@@ -1,19 +1,11 @@
-import mongoose from "mongoose";
+const mongoose = require('mongoose');
 
 const requestSchema = new mongoose.Schema({
-  mentor: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User"
-  },
-  mentee: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User"
-  },
-  status: {
-    type: String,
-    enum: ["pending", "accepted", "rejected"],
-    default: "pending"
-  }
+  from: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  to: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  message: { type: String, default: '' },
+  status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
+  goals: { type: String, default: '' }
 }, { timestamps: true });
 
-export default mongoose.model("Request", requestSchema);
+module.exports = mongoose.model('Request', requestSchema);

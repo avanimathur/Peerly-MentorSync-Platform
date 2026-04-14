@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sessions – Peerly</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content">
+      <div class="flex justify-between items-center mb-6" style="flex-wrap:wrap;gap:10px">
+        <div class="tabs" style="margin:0">
+          <button class="tab active" onclick="switchTab('upcoming',this)">Upcoming</button>
+          <button class="tab" onclick="switchTab('pending',this)">Pending</button>
+          <button class="tab" onclick="switchTab('completed',this)">Completed</button>
+          <button class="tab" onclick="switchTab('cancelled',this)">Cancelled</button>
+        </div>
+        <!-- Only mentees can book sessions -->
+        <div id="book-btn-area"></div>
+      </div>
+      <div id="sessions-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- New session modal (mentee only) -->
+<div class="modal-overlay hidden" id="new-session-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Book a Session</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('new-session-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Mentor</label>
+        <input type="text" id="sess-mentor-search" class="form-control" placeholder="Search mentor name…" oninput="searchMentors(this.value)">
+        <div id="mentor-suggestions" style="border:1px solid var(--gray-200);border-radius:8px;max-height:150px;overflow-y:auto;display:none;margin-top:2px"></div>
+        <input type="hidden" id="sess-mentor-id">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Session title</label>
+        <input type="text" id="sess-title" class="form-control" placeholder="e.g. Portfolio Review, Career Advice">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description <span class="text-muted">(optional)</span></label>
+        <textarea id="sess-desc" class="form-control" rows="2" placeholder="What would you like to cover?"></textarea>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Date & time</label>
+          <input type="datetime-local" id="sess-time" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Duration</label>
+          <select id="sess-dur" class="form-control">
+            <option value="30">30 min</option>
+            <option value="60" selected>60 min</option>
+            <option value="90">90 min</option>
+            <option value="120">2 hours</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Meet link <span class="text-muted">(optional)</span></label>
+        <input type="url" id="sess-link" class="form-control" placeholder="https://meet.google.com/…">
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;margin-top:4px">
+        <input type="checkbox" id="sess-recurring"> Recurring weekly session
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('new-session-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createSession()" id="create-sess-btn">Book session</button>
+    </div>
+  </div>
+</div>
+
+<!-- Notes modal -->
+<div class="modal-overlay hidden" id="notes-modal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Session Notes</span><button class="btn btn-ghost btn-icon" onclick="closeModal('notes-modal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="notes-sess-id">
+      <div class="form-group"><label class="form-label">Notes</label><textarea id="sess-notes" class="form-control" rows="4" placeholder="What was discussed?"></textarea></div>
+      <div class="form-group">
+        <label class="form-label">Action items</label>
+        <div id="action-items-list"></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addActionItem()">+ Add item</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('notes-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveNotes()">Save notes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Feedback modal (mentee only) -->
+<div class="modal-overlay hidden" id="feedback-modal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Rate this Session</span><button class="btn btn-ghost btn-icon" onclick="closeModal('feedback-modal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="fb-sess-id">
+      <div class="form-group">
+        <label class="form-label">Your rating</label>
+        <div class="star-rating" id="star-rating">
+          ${[1,2,3,4,5].map(i => `<span class="star" data-val="${i}" onclick="setRating(${i})">★</span>`).join('')}
+        </div>
+        <input type="hidden" id="fb-rating" value="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Comment <span class="text-muted">(optional)</span></label>
+        <textarea id="fb-comment" class="form-control" rows="3" placeholder="How was the session?"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('feedback-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitFeedback()">Submit rating</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add meet link modal (mentor only) -->
+<div class="modal-overlay hidden" id="meet-modal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Confirm & Add Meet Link</span><button class="btn btn-ghost btn-icon" onclick="closeModal('meet-modal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="meet-sess-id">
+      <div class="form-group">
+        <label class="form-label">Meet link <span class="text-muted">(optional)</span></label>
+        <input type="url" id="meet-link-input" class="form-control" placeholder="https://meet.google.com/…">
+        <div class="form-hint">Paste your video call link so the mentee can join</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('meet-modal')">Cancel</button>
+      <button class="btn btn-success" onclick="confirmWithLink()">Confirm session</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/utils.js"></script>
+<script src="../js/page.js"></script>
+<script>
+initPage('sessions', 'Sessions');
+const me = getUser();
+const isMentor = me?.role === 'mentor';
+const isMentee = me?.role === 'mentee';
+let currentTab = 'upcoming';
+
+// Show "Book session" button only to mentees
+document.getElementById('book-btn-area').innerHTML = isMentee
+  ? '<button class="btn btn-primary" onclick="openModal(\'new-session-modal\')">+ Book session</button>'
+  : '<span class="text-sm text-muted">Mentees request sessions with you</span>';
+
+function switchTab(tab, btn) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  loadSessions();
+}
+
+async function loadSessions() {
+  const list = document.getElementById('sessions-list');
+  list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray-400)">Loading…</div>';
+  try {
+    let sessions = await apiFetch('/sessions');
+    const now = new Date();
+
+    if (currentTab === 'upcoming')   sessions = sessions.filter(s => s.status === 'confirmed' && new Date(s.scheduledAt) >= now);
+    else if (currentTab === 'pending')   sessions = sessions.filter(s => s.status === 'pending');
+    else if (currentTab === 'completed') sessions = sessions.filter(s => s.status === 'completed');
+    else if (currentTab === 'cancelled') sessions = sessions.filter(s => s.status === 'cancelled');
+
+    sessions.sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+
+    if (!sessions.length) {
+      const emptyMsgs = {
+        upcoming:  { icon: '📅', title: 'No upcoming sessions', sub: isMentee ? 'Book a session with a mentor' : 'Pending sessions you confirm will appear here' },
+        pending:   { icon: '⏳', title: 'No pending sessions',  sub: isMentee ? 'Request a session from a mentor' : 'New session requests will appear here' },
+        completed: { icon: '✅', title: 'No completed sessions', sub: '' },
+        cancelled: { icon: '❌', title: 'No cancelled sessions', sub: '' },
+      };
+      const e = emptyMsgs[currentTab];
+      list.innerHTML = `<div class="empty-state"><div class="empty-icon">${e.icon}</div><div class="empty-title">${e.title}</div><div class="empty-desc">${e.sub}</div>${currentTab === 'upcoming' && isMentee ? '<button class="btn btn-primary btn-sm" onclick="openModal(\'new-session-modal\')">Book session</button>' : ''}</div>`;
+      return;
+    }
+
+    list.innerHTML = sessions.map(s => {
+      const other = s.mentor?._id === me._id ? s.mentee : s.mentor;
+      const dt = new Date(s.scheduledAt);
+      const isPast = dt < new Date();
+      const hasFeedback = s.feedbackMentee?.rating;
+
+      return `<div class="session-card">
+        <div class="session-date">
+          <div class="day">${dt.getDate()}</div>
+          <div class="month">${dt.toLocaleDateString('en',{month:'short'})}</div>
+        </div>
+        <div class="session-info">
+          <div class="session-title">${s.title}</div>
+          <div class="session-meta">
+            ${isMentor ? 'with mentee' : 'with'} <strong>${other?.name || 'Unknown'}</strong>
+            · ${dt.toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})}
+            · ${s.duration} min
+            ${s.isRecurring ? '· <span class="badge badge-primary" style="font-size:11px">Recurring</span>' : ''}
+          </div>
+          ${s.notes ? `<div class="text-sm text-muted" style="margin-top:4px;font-style:italic">📝 ${s.notes.substring(0,80)}${s.notes.length > 80 ? '…' : ''}</div>` : ''}
+        </div>
+        <div class="session-actions">
+          ${s.meetLink ? `<a href="${s.meetLink}" target="_blank" class="btn btn-primary btn-sm">Join</a>` : ''}
+
+          ${/* Mentor actions */ isMentor ? `
+            ${s.status === 'pending' ? `
+              <button class="btn btn-success btn-sm" onclick="openMeetModal('${s._id}')">✓ Confirm</button>
+              <button class="btn btn-danger btn-sm" onclick="updateStatus('${s._id}','cancelled')">✕ Decline</button>` : ''}
+            ${s.status === 'confirmed' ? `
+              <button class="btn btn-outline btn-sm" onclick="openNotes('${s._id}','${(s.notes||'').replace(/'/g,"\\'")}')">Notes</button>
+              ${isPast ? `<button class="btn btn-success btn-sm" onclick="updateStatus('${s._id}','completed')">Mark done</button>` : ''}
+              <button class="btn btn-ghost btn-sm" onclick="updateStatus('${s._id}','cancelled')">Cancel</button>` : ''}
+          ` : ''}
+
+          ${/* Mentee actions */ isMentee ? `
+            ${s.status === 'pending' ? `
+              <span class="badge badge-warning">Awaiting confirmation</span>
+              <button class="btn btn-ghost btn-sm" onclick="updateStatus('${s._id}','cancelled')">Cancel request</button>` : ''}
+            ${s.status === 'confirmed' ? `
+              <button class="btn btn-outline btn-sm" onclick="openNotes('${s._id}','${(s.notes||'').replace(/'/g,"\\'")}')">Notes</button>
+              <button class="btn btn-ghost btn-sm" onclick="updateStatus('${s._id}','cancelled')">Cancel</button>` : ''}
+            ${s.status === 'completed' && !hasFeedback ? `
+              <button class="btn btn-primary btn-sm" onclick="openFeedback('${s._id}')">⭐ Rate</button>` : ''}
+            ${s.status === 'completed' && hasFeedback ? `
+              <span class="badge badge-success">Rated ${s.feedbackMentee.rating}★</span>` : ''}
+          ` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-title">Error loading sessions</div><p class="text-sm text-muted">${err.message}</p></div>`;
+  }
+}
+
+// Mentor mentor search for booking
+async function searchMentors(q) {
+  const box = document.getElementById('mentor-suggestions');
+  if (!q.trim()) { box.style.display = 'none'; return; }
+  try {
+    const mentors = await apiFetch(`/users/mentors?search=${encodeURIComponent(q)}`);
+    box.style.display = mentors.length ? 'block' : 'none';
+    box.innerHTML = mentors.slice(0, 5).map(m => `
+      <div style="padding:9px 12px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--gray-100);display:flex;gap:8px;align-items:center"
+        onmousedown="selectMentor('${m._id}','${(m.name||'').replace(/'/g,"\\'")}')">
+        <div class="avatar avatar-sm">${avatarHTML(m)}</div>
+        <div><strong>${m.name}</strong> <span style="color:var(--gray-500)">${m.department || ''}</span></div>
+      </div>`).join('');
+  } catch {}
+}
+
+function selectMentor(id, name) {
+  document.getElementById('sess-mentor-id').value = id;
+  document.getElementById('sess-mentor-search').value = name;
+  document.getElementById('mentor-suggestions').style.display = 'none';
+}
+
+async function createSession() {
+  const btn = document.getElementById('create-sess-btn');
+  const mentorId = document.getElementById('sess-mentor-id').value;
+  const title = document.getElementById('sess-title').value.trim();
+  const time = document.getElementById('sess-time').value;
+  if (!mentorId) { showToast('Please select a mentor', 'error'); return; }
+  if (!title)    { showToast('Please enter a title', 'error'); return; }
+  if (!time)     { showToast('Please pick a date and time', 'error'); return; }
+  btn.disabled = true; btn.textContent = 'Booking…';
+  try {
+    await apiFetch('/sessions', {
+      method: 'POST',
+      body: JSON.stringify({
+        mentor: mentorId, title,
+        description: document.getElementById('sess-desc').value,
+        scheduledAt: time,
+        duration: parseInt(document.getElementById('sess-dur').value),
+        meetLink: document.getElementById('sess-link').value,
+        isRecurring: document.getElementById('sess-recurring').checked
+      })
+    });
+    closeModal('new-session-modal');
+    showToast('Session requested! Waiting for mentor confirmation.', 'success');
+    switchTab('pending', document.querySelector('.tab:nth-child(2)'));
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Book session';
+  }
+}
+
+async function updateStatus(id, status) {
+  try {
+    await apiFetch(`/sessions/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
+    showToast(
+      status === 'completed' ? 'Session marked complete ✅' :
+      status === 'cancelled' ? 'Session cancelled' : `Session ${status}`,
+      status === 'completed' ? 'success' : 'info'
+    );
+    loadSessions();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+function openMeetModal(sessId) {
+  document.getElementById('meet-sess-id').value = sessId;
+  document.getElementById('meet-link-input').value = '';
+  openModal('meet-modal');
+}
+
+async function confirmWithLink() {
+  const id = document.getElementById('meet-sess-id').value;
+  const meetLink = document.getElementById('meet-link-input').value;
+  try {
+    await apiFetch(`/sessions/${id}/status`, { method: 'PUT', body: JSON.stringify({ status: 'confirmed', meetLink }) });
+    closeModal('meet-modal');
+    showToast('Session confirmed! ✅', 'success');
+    loadSessions();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+function openNotes(id, existing) {
+  document.getElementById('notes-sess-id').value = id;
+  document.getElementById('sess-notes').value = existing;
+  document.getElementById('action-items-list').innerHTML = '';
+  openModal('notes-modal');
+}
+
+function addActionItem() {
+  const list = document.getElementById('action-items-list');
+  const div = document.createElement('div');
+  div.className = 'flex gap-2 mb-4';
+  div.innerHTML = `<input type="text" class="form-control action-item-input" placeholder="Action item…">
+    <button class="btn btn-ghost btn-icon" onclick="this.parentElement.remove()">✕</button>`;
+  list.appendChild(div);
+}
+
+async function saveNotes() {
+  const id = document.getElementById('notes-sess-id').value;
+  const notes = document.getElementById('sess-notes').value;
+  const actionItems = Array.from(document.querySelectorAll('.action-item-input'))
+    .map(i => ({ text: i.value.trim(), done: false })).filter(a => a.text);
+  try {
+    await apiFetch(`/sessions/${id}/notes`, { method: 'PUT', body: JSON.stringify({ notes, actionItems }) });
+    closeModal('notes-modal'); showToast('Notes saved!', 'success'); loadSessions();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+function openFeedback(id) {
+  document.getElementById('fb-sess-id').value = id;
+  document.getElementById('fb-rating').value = 0;
+  document.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
+  document.getElementById('fb-comment').value = '';
+  openModal('feedback-modal');
+}
+
+function setRating(val) {
+  document.getElementById('fb-rating').value = val;
+  document.querySelectorAll('.star').forEach(s => s.classList.toggle('active', parseInt(s.dataset.val) <= val));
+}
+
+async function submitFeedback() {
+  const rating = parseInt(document.getElementById('fb-rating').value);
+  if (!rating) { showToast('Please select a rating', 'error'); return; }
+  try {
+    await apiFetch(`/sessions/${document.getElementById('fb-sess-id').value}/feedback`, {
+      method: 'POST',
+      body: JSON.stringify({ rating, comment: document.getElementById('fb-comment').value })
+    });
+    closeModal('feedback-modal'); showToast('Rating submitted! 🎉', 'success'); loadSessions();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+loadSessions();
+</script>
+</body>
+</html>

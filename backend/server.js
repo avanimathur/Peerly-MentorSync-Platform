@@ -1,66 +1,60 @@
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-import express from "express";
-import mongoose from "mongoose";
-import cors from "cors";
-
-import authRoutes from "./routes/authRoutes.js";
-import userRoutes from "./routes/userRoutes.js";
-import requestRoutes from "./routes/requestRoutes.js";
-import matchRoutes from "./routes/matchRoutes.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const envFilePath = path.join(__dirname, ".env");
-if (fs.existsSync(envFilePath)) {
-  const envFile = fs.readFileSync(envFilePath, "utf-8");
-
-  envFile.split("\n").forEach((line) => {
-    const trimmedLine = line.trim();
-    if (!trimmedLine || trimmedLine.startsWith("#")) {
-      return;
-    }
-
-    const [key, ...valueParts] = trimmedLine.split("=");
-    const value = valueParts.join("=").trim();
-    if (key && value && !process.env[key]) {
-      process.env[key] = value;
-    }
-  });
-}
+require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
+const path = require('path');
 
 const app = express();
-const DEFAULT_MONGO_URI = "mongodb://127.0.0.1:27017/mentorConnect" ;
-const MONGO_URI = process.env.MONGO_URI || process.env.mongo_uri || DEFAULT_MONGO_URI;
-const PORT = process.env.PORT || 5000;
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: '*', methods: ['GET', 'POST'] }
+});
 
 // Middleware
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
+app.use(morgan('dev'));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Rate limiting
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
+app.use('/api/', limiter);
+
+// MongoDB
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/peerly';
+mongoose.connect(MONGO_URI)
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error('MongoDB error:', err));
 
 // Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/requests", requestRoutes);
-app.use("/api/match", matchRoutes);
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/users', require('./routes/users'));
+app.use('/api/requests', require('./routes/requests'));
+app.use('/api/match', require('./routes/match'));
+app.use('/api/sessions', require('./routes/sessions'));
+app.use('/api/messages', require('./routes/messages'));
+app.use('/api/goals', require('./routes/goals'));
+app.use('/api/community', require('./routes/community'));
+app.use('/api/resources', require('./routes/resources'));
+app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/admin', require('./routes/admin'));
+app.use('/api/reviews', require('./routes/reviews'));
 
-// MongoDB Connection
-if (!process.env.MONGO_URI && !process.env.mongo_uri) {
-  console.warn(`MONGO_URI is not present. Falling back to default: ${DEFAULT_MONGO_URI}`);
-}
+// Socket.io for real-time messaging
+require('./socket/chat')(io);
 
-mongoose
-  .connect(MONGO_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch((err) => {
-    console.error("MongoDB connection failed:", err.message);
-    process.exit(1);
-  });
-
-// Server start
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(err.status || 500).json({ message: err.message || 'Server error' });
 });
+
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => console.log(`Peerly server running on port ${PORT}`));

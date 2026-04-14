@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Messages – Peerly</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/main.css">
+<script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content" style="display:flex;flex-direction:column">
+    <div class="topbar" id="topbar"></div>
+    <div class="chat-layout">
+      <div class="chat-sidebar" id="chat-sidebar">
+        <div class="chat-search">
+          <input type="text" class="form-control" placeholder="Search conversations…" id="conv-search">
+        </div>
+        <div class="chat-list" id="conv-list">
+          <div style="padding:24px;text-align:center;color:var(--gray-400)">Loading…</div>
+        </div>
+      </div>
+      <div class="chat-main" id="chat-main">
+        <div style="display:flex;align-items:center;justify-content:center;flex:1;flex-direction:column;color:var(--gray-400)">
+          <div style="font-size:48px;margin-bottom:12px">💬</div>
+          <div style="font-size:16px;font-weight:600;color:var(--gray-600)">Select a conversation</div>
+          <div style="font-size:14px;margin-top:4px">or start a new one from the Mentors page</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="../js/utils.js"></script>
+<script src="../js/page.js"></script>
+<script>
+initPage('messages', 'Messages');
+const me = getUser();
+let socket, currentUserId = null;
+
+function initSocket() {
+  socket = io('http://localhost:5000', { auth: { token: getToken() } });
+  socket.on('new_message', msg => {
+    if (msg.sender._id === currentUserId || msg.receiver === me._id) appendMessage(msg);
+    loadConversations();
+  });
+  socket.on('typing', ({ from }) => {
+    if (from === currentUserId) document.getElementById('typing-ind').textContent = 'typing…';
+  });
+  socket.on('stop_typing', () => {
+    const el = document.getElementById('typing-ind');
+    if (el) el.textContent = '';
+  });
+  socket.on('messages_read', () => {
+    document.querySelectorAll('.msg-status').forEach(el => el.textContent = '✓✓');
+  });
+}
+
+async function loadConversations() {
+  try {
+    const convs = await apiFetch('/messages');
+    const list = document.getElementById('conv-list');
+    if (!convs.length) { list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--gray-400);font-size:14px">No conversations yet.<br>Message someone from their profile.</div>'; return; }
+    list.innerHTML = convs.map(c => {
+      const other = c.sender._id === me._id ? c.receiver : c.sender;
+      return `<div class="chat-item ${other._id === currentUserId ? 'active' : ''}" onclick="openConv('${other._id}','${(other.name||'').replace(/'/g,"\\'")}','${other.avatar||''}')">
+        <div class="avatar avatar-sm">${avatarHTML(other)}</div>
+        <div class="chat-item-info">
+          <div class="chat-item-name">${other.name}</div>
+          <div class="chat-item-preview">${c.fileUrl ? '📎 File' : (c.content || '').substring(0, 40)}</div>
+        </div>
+        <div class="chat-item-time">${timeAgo(c.createdAt)}</div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    document.getElementById('conv-list').innerHTML = `<div style="padding:16px;color:var(--danger);font-size:13px">${err.message}</div>`;
+  }
+}
+
+async function openConv(userId, name, avatar) {
+  currentUserId = userId;
+  socket?.emit('join_conversation', { withUserId: userId });
+  document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+
+  const main = document.getElementById('chat-main');
+  main.innerHTML = `
+    <div class="chat-header">
+      <div class="flex gap-3 items-center">
+        <div class="avatar">${avatarHTML({name,avatar})}</div>
+        <div><div class="font-semibold">${name}</div><span class="typing-indicator" id="typing-ind"></span></div>
+      </div>
+      <div class="flex gap-2">
+        <label class="btn btn-outline btn-sm" for="file-upload">📎 File</label>
+        <input type="file" id="file-upload" style="display:none" onchange="sendFile(this)">
+      </div>
+    </div>
+    <div class="chat-messages" id="msg-list"></div>
+    <div class="chat-input-area">
+      <input type="text" class="chat-input" id="msg-input" placeholder="Type a message…">
+      <button class="btn btn-primary btn-icon" onclick="sendMsg()">➤</button>
+    </div>`;
+
+  const input = document.getElementById('msg-input');
+  let typingTimer;
+  input.addEventListener('input', () => {
+    socket?.emit('typing', { to: userId });
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => socket?.emit('stop_typing', { to: userId }), 1200);
+  });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') sendMsg(); });
+
+  const msgs = await apiFetch(`/messages/${userId}`);
+  const list = document.getElementById('msg-list');
+  msgs.forEach(m => appendMessage(m, false));
+  list.scrollTop = list.scrollHeight;
+  socket?.emit('mark_read', { conversationId: [me._id, userId].sort().join('_') });
+  loadConversations();
+}
+
+function appendMessage(msg, scroll = true) {
+  const list = document.getElementById('msg-list');
+  if (!list) return;
+  const isSent = (msg.sender._id || msg.sender) === me._id;
+  const div = document.createElement('div');
+  div.className = `msg-bubble ${isSent ? 'sent' : 'received'}`;
+  let body = '';
+  if (msg.fileUrl) {
+    const url = msg.fileUrl.startsWith('/') ? 'http://localhost:5000' + msg.fileUrl : msg.fileUrl;
+    body = msg.fileType?.startsWith('image') ? `<img src="${url}" style="max-width:200px;border-radius:8px">` : `<a href="${url}" target="_blank" style="color:${isSent?'white':'var(--primary)'}">📎 ${msg.fileName}</a>`;
+  } else { body = msg.content; }
+  div.innerHTML = `<div class="msg-content">${body}</div><div class="msg-time">${formatDateTime(msg.createdAt)}</div>`;
+  list.appendChild(div);
+  if (scroll) list.scrollTop = list.scrollHeight;
+}
+
+async function sendMsg() {
+  const input = document.getElementById('msg-input');
+  const content = input.value.trim();
+  if (!content || !currentUserId) return;
+  input.value = '';
+  socket?.emit('stop_typing', { to: currentUserId });
+  socket?.emit('send_message', { to: currentUserId, content });
+}
+
+async function sendFile(input) {
+  if (!input.files[0] || !currentUserId) return;
+  const fd = new FormData();
+  fd.append('file', input.files[0]);
+  try {
+    const msg = await apiFetch(`/messages/${currentUserId}/file`, { method: 'POST', body: fd });
+    appendMessage(msg);
+  } catch (err) { showToast(err.message, 'error'); }
+  input.value = '';
+}
+
+// Handle ?with=userId from other pages — open after conversations sidebar loads
+const params = new URLSearchParams(location.search);
+const _withId     = params.get('with');
+const _withName   = params.get('name') || 'User';
+const _withAvatar = params.get('avatar') || '';
+
+initSocket();
+loadConversations().then(() => {
+  if (_withId) openConv(_withId, decodeURIComponent(_withName), decodeURIComponent(_withAvatar));
+});
+</script>
+</body>
+</html>

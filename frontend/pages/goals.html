@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Goals – Peerly</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <div class="topbar" id="topbar"></div>
+    <div class="page-content">
+      <div class="flex justify-between items-center mb-6" style="flex-wrap:wrap;gap:10px">
+        <div>
+          <div class="tabs" style="margin:0">
+            <button class="tab active" onclick="filterGoals('active',this)">Active</button>
+            <button class="tab" onclick="filterGoals('completed',this)">Completed</button>
+            <button class="tab" onclick="filterGoals('paused',this)">Paused</button>
+          </div>
+          <div id="role-context" class="text-sm text-muted" style="margin-top:6px"></div>
+        </div>
+        <!-- Only mentees create goals -->
+        <div id="create-btn-area"></div>
+      </div>
+      <div id="goals-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- New goal modal (mentee only) -->
+<div class="modal-overlay hidden" id="new-goal-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">New Goal</span>
+      <button class="btn btn-ghost btn-icon" onclick="closeModal('new-goal-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Goal title</label>
+        <input type="text" id="goal-title" class="form-control" placeholder="e.g. Land a software internship">
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select id="goal-cat" class="form-control">
+            <option value="career">Career</option>
+            <option value="technical">Technical</option>
+            <option value="academic">Academic</option>
+            <option value="personal">Personal</option>
+            <option value="general">General</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Due date <span class="text-muted">(optional)</span></label>
+          <input type="date" id="goal-due" class="form-control">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description <span class="text-muted">(optional)</span></label>
+        <textarea id="goal-desc" class="form-control" rows="2" placeholder="What does success look like?"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Milestones <span class="text-muted">(optional)</span></label>
+        <div id="milestones-list"></div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addMilestone()">+ Add milestone</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('new-goal-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createGoal()" id="create-goal-btn">Create goal</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/utils.js"></script>
+<script src="../js/page.js"></script>
+<script>
+initPage('goals', 'Goals');
+const me = getUser();
+const isMentor = me?.role === 'mentor';
+const isMentee = me?.role === 'mentee';
+
+// Role context label
+document.getElementById('role-context').textContent = isMentor
+  ? 'Viewing your mentees\' goals (read-only)'
+  : 'Your personal goals';
+
+// Create button for mentees only
+document.getElementById('create-btn-area').innerHTML = isMentee
+  ? '<button class="btn btn-primary" onclick="openModal(\'new-goal-modal\')">+ New goal</button>'
+  : '';
+
+let allGoals = [], currentFilter = 'active';
+
+const catColors = {
+  career: 'badge-primary', technical: 'badge-accent',
+  academic: 'badge-warning', personal: 'badge-success', general: 'badge-gray'
+};
+
+function filterGoals(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderGoals();
+}
+
+function renderGoals() {
+  const list = document.getElementById('goals-list');
+  const filtered = allGoals.filter(g => g.status === currentFilter);
+
+  if (!filtered.length) {
+    list.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">🎯</div>
+      <div class="empty-title">No ${currentFilter} goals</div>
+      ${isMentee && currentFilter === 'active'
+        ? '<button class="btn btn-primary btn-sm" onclick="openModal(\'new-goal-modal\')">Create your first goal</button>'
+        : isMentor && currentFilter === 'active'
+          ? '<div class="empty-desc">Goals set by your mentees will appear here</div>'
+          : ''}
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(g => {
+    const done = g.milestones.filter(m => m.done).length;
+    const total = g.milestones.length;
+    const pct = total ? Math.round(done / total * 100) : (g.status === 'completed' ? 100 : 0);
+    // For mentors: show whose goal it is
+    const ownerLabel = isMentor && g.mentee
+      ? `<div class="text-xs text-muted" style="margin-bottom:6px">👤 ${g.mentee.name}${g.mentee.department ? ' · ' + g.mentee.department : ''}</div>`
+      : '';
+
+    return `<div class="goal-card">
+      <div class="goal-header">
+        <div style="flex:1;min-width:0">
+          ${ownerLabel}
+          <div class="goal-title">${g.title}</div>
+          ${g.dueDate ? `<div class="text-sm text-muted">Due ${formatDate(g.dueDate)}</div>` : ''}
+        </div>
+        <div class="flex gap-2 items-center" style="flex-shrink:0">
+          <span class="badge ${catColors[g.category] || 'badge-gray'}">${g.category}</span>
+          ${isMentee && g.status !== 'completed'
+            ? `<button class="btn btn-ghost btn-icon" title="Delete goal" onclick="deleteGoal('${g._id}')">🗑</button>`
+            : ''}
+        </div>
+      </div>
+      ${g.description ? `<div class="text-sm text-muted mb-4">${g.description}</div>` : ''}
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      <div class="text-sm text-muted" style="margin-bottom:10px">${done}/${total} milestones · ${pct}% complete</div>
+
+      ${g.milestones.map((m, idx) => `
+        <div class="milestone ${m.done ? 'done' : ''}">
+          <input type="checkbox" ${m.done ? 'checked' : ''}
+            ${isMentee ? `onchange="toggleMilestone('${g._id}',${idx})"` : 'disabled title="Only the mentee can update milestones"'}
+            style="${isMentor ? 'cursor:not-allowed;opacity:0.6' : ''}">
+          <span>${m.text}</span>
+          ${m.completedAt ? `<span class="text-xs text-muted" style="margin-left:auto">${formatDate(m.completedAt)}</span>` : ''}
+        </div>`).join('')}
+
+      ${isMentee ? `
+        <div class="flex gap-2" style="margin-top:12px">
+          ${g.status === 'active'   ? `<button class="btn btn-outline btn-sm" onclick="pauseGoal('${g._id}')">⏸ Pause</button>` : ''}
+          ${g.status === 'paused'   ? `<button class="btn btn-primary btn-sm" onclick="resumeGoal('${g._id}')">▶ Resume</button>` : ''}
+        </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function loadGoals() {
+  try {
+    allGoals = await apiFetch('/goals');
+    renderGoals();
+  } catch (err) {
+    document.getElementById('goals-list').innerHTML =
+      `<div class="empty-state"><div class="empty-title">Failed to load goals</div><p class="text-sm text-muted">${err.message}</p></div>`;
+  }
+}
+
+function addMilestone() {
+  const list = document.getElementById('milestones-list');
+  const div = document.createElement('div');
+  div.className = 'flex gap-2 mb-4';
+  div.innerHTML = `<input type="text" class="form-control ms-input" placeholder="e.g. Update resume">
+    <button class="btn btn-ghost btn-icon" onclick="this.parentElement.remove()">✕</button>`;
+  list.appendChild(div);
+}
+
+async function createGoal() {
+  const title = document.getElementById('goal-title').value.trim();
+  if (!title) { showToast('Please enter a goal title', 'error'); return; }
+  const btn = document.getElementById('create-goal-btn');
+  btn.disabled = true; btn.textContent = 'Creating…';
+  try {
+    const milestones = Array.from(document.querySelectorAll('.ms-input'))
+      .map(i => i.value.trim()).filter(Boolean);
+    await apiFetch('/goals', {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        category: document.getElementById('goal-cat').value,
+        dueDate: document.getElementById('goal-due').value || undefined,
+        description: document.getElementById('goal-desc').value,
+        milestones
+      })
+    });
+    closeModal('new-goal-modal');
+    // Reset form
+    document.getElementById('goal-title').value = '';
+    document.getElementById('goal-desc').value = '';
+    document.getElementById('goal-due').value = '';
+    document.getElementById('milestones-list').innerHTML = '';
+    showToast('Goal created! 🎯', 'success');
+    loadGoals();
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create goal';
+  }
+}
+
+async function toggleMilestone(goalId, idx) {
+  try {
+    await apiFetch(`/goals/${goalId}/milestone/${idx}`, { method: 'PUT' });
+    loadGoals();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function deleteGoal(id) {
+  if (!confirm('Delete this goal? This cannot be undone.')) return;
+  try {
+    await apiFetch(`/goals/${id}`, { method: 'DELETE' });
+    showToast('Goal deleted', 'info');
+    loadGoals();
+  } catch (err) { showToast(err.message, 'error'); }
+}
+
+async function pauseGoal(id) {
+  try { await apiFetch(`/goals/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'paused' }) }); loadGoals(); }
+  catch (err) { showToast(err.message, 'error'); }
+}
+
+async function resumeGoal(id) {
+  try { await apiFetch(`/goals/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'active' }) }); loadGoals(); }
+  catch (err) { showToast(err.message, 'error'); }
+}
+
+loadGoals();
+</script>
+</body>
+</html>
