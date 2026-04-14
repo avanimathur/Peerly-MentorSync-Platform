@@ -6,6 +6,18 @@ It includes:
 - A static frontend (HTML/CSS/JavaScript) for authentication, dashboard, profile, mentors listing, and requests.
 - A Node.js + Express backend with MongoDB for auth, profiles, mentor requests, and mentor matching.
 
+## Demo
+
+
+
+https://github.com/user-attachments/assets/af927ccf-6fe7-4021-9ccf-0d91b1cd8486
+
+
+
+https://github.com/user-attachments/assets/21bac3e6-5436-4cd2-a022-18913e43ba68
+
+
+
 ## Features
 
 - User registration and login
