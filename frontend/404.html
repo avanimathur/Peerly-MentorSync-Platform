@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>404 - Page Not Found</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* Navbar */
+    nav {
+      background: #1e293b;
+      padding: 15px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    nav h1 {
+      margin: 0;
+      font-size: 20px;
+      color: #38bdf8;
+    }
+
+    nav a {
+      color: white;
+      text-decoration: none;
+      margin-left: 15px;
+      font-size: 14px;
+    }
+
+    nav a:hover {
+      text-decoration: underline;
+    }
+
+    /* Main */
+    .container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      text-align: center;
+    }
+
+    h2 {
+      font-size: 80px;
+      margin: 0;
+      color: #f87171;
+    }
+
+    p {
+      font-size: 18px;
+      margin: 10px 0 20px;
+    }
+
+    .btn {
+      background: #38bdf8;
+      color: black;
+      padding: 10px 20px;
+      border-radius: 5px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .btn:hover {
+      background: #0ea5e9;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav>
+    <h1>Peerly</h1>
+    <div>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="/">Home</a>
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <div class="container">
+    <h2>404</h2>
+    <p>Oops! The page you're looking for doesn't exist.</p>
+    <a class="btn" href="dashboard.html">Go Back to Dashboard</a>
+  </div>
+
+</body>
+</html>
